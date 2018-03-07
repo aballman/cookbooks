@@ -1,0 +1,54 @@
+version: '3'
+volumes:
+  bin:
+  secrets:
+  cookbooks:
+  config:
+
+services:
+  amazonlinux:
+    build:
+      context: .
+      dockerfile: Dockerfile-AmazonLinux
+    image: trr/amazonlinux
+
+  chef_data:
+    build:
+      context: .
+      dockerfile: Dockerfile-ChefCookbooks
+    depends_on:
+     - amazonlinux
+    volumes:
+      - cookbooks:/var/chef/cookbooks
+      - config:/var/chef/config
+    command: /bin/true
+
+# Attach the image containing the Chef installation
+  chef:
+    build:
+      context: .
+      dockerfile: Dockerfile-Chef
+    depends_on:
+      - amazonlinux
+    volumes:
+      - bin:/opt/chef
+
+  # Override default command to use this container as a volume container
+    command: /bin/true
+
+# Build the application container using Chef and the cookbooks on the attached volumes
+  tabula_rasa:
+    image: trr/amazonlinux:latest
+    depends_on:
+     - amazonlinux
+     - chef
+     - chef_data
+    privileged: true
+    environment:
+      PATH: "/opt/chef/bin:$PATH"
+    volumes:
+       - cookbooks:/var/chef/cookbooks
+       - config:/var/chef/config
+       - bin:/opt/chef
+    entrypoint: "/opt/chef/bin/chef-client"
+    command: "-c /var/chef/config/chef-zero.rb -z -j /var/chef/config/config.json"
